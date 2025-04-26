@@ -1,85 +1,123 @@
-import pandas as pd
-
 def analyze_hitter_logs(hitter_logs):
     """
-    Checks if a hitter is hot over the last 10–15 games.
-    Must have a batting average >= .250.
+    Analyze a hitter's recent logs and assign a star rating.
+
+    Args:
+        hitter_logs (DataFrame): Last 10-15 games of hitter's stats.
+
+    Returns:
+        int: Star rating (3, 4, or 5). Returns None if doesn't meet criteria.
     """
     if hitter_logs is None or hitter_logs.empty:
-        return False
+        return None
 
-    total_hits = hitter_logs['Hits'].sum()
-    total_atbats = hitter_logs['AtBats'].sum()
+    # Only keep games where they had an At-Bat (exclude games they sat)
+    recent_games = hitter_logs[hitter_logs['AtBats'] > 0].head(10)
 
-    if total_atbats == 0:
-        return False
+    if recent_games.empty:
+        return None
 
-    batting_average = total_hits / total_atbats
-    return batting_average >= 0.250
+    # Check how many games they had at least 1 hit
+    hit_games = recent_games['Hits'] >= 1
+    hit_count = hit_games.sum()
+
+    # Check if they have a hit streak (consecutive games)
+    streak = 0
+    max_streak = 0
+    for hit in hit_games:
+        if hit:
+            streak += 1
+            max_streak = max(max_streak, streak)
+        else:
+            streak = 0
+
+    # Apply rules
+    if max_streak >= 5:
+        return 5  # 5-star pick
+    elif hit_count >= 8:
+        return 4  # 4-star pick
+    elif hit_count >= 7:
+        return 3  # 3-star pick
+    else:
+        return None  # Not good enough
 
 def analyze_pitcher_logs(pitcher_logs):
     """
-    Checks if a pitcher is hot over the last 10–15 games.
-    Must average at least 5.5 strikeouts per game and allow fewer than 7 hits per game.
+    Analyze a pitcher's recent form.
+
+    Args:
+        pitcher_logs (DataFrame): Last 5-10 games of pitcher's stats.
+
+    Returns:
+        bool: True if pitcher is in good form, else False.
     """
     if pitcher_logs is None or pitcher_logs.empty:
         return False
 
-    total_strikeouts = pitcher_logs['Strikeouts'].sum()
-    total_hits_allowed = pitcher_logs['HitsAllowed'].sum()
-    games_played = len(pitcher_logs)
+    recent_games = pitcher_logs.head(5)
 
-    if games_played == 0:
+    if recent_games.empty:
         return False
 
-    avg_strikeouts = total_strikeouts / games_played
-    avg_hits_allowed = total_hits_allowed / games_played
+    avg_strikeouts = recent_games['Strikeouts'].mean()
+    avg_hits_allowed = recent_games['HitsAllowed'].mean()
 
-    return (avg_strikeouts >= 5.5) and (avg_hits_allowed <= 7.0)
+    # Basic pitcher rule: High strikeouts, low hits allowed
+    if avg_strikeouts >= 5 and avg_hits_allowed <= 7:
+        return True
+    return False
 
-def analyze_batter_vs_pitcher(batter_vs_pitcher_data):
+def analyze_batter_vs_pitcher(bvp_data):
     """
-    Checks if a batter has a good history against today's pitcher.
-    Must have at least 10 at-bats and batting average >= .250.
+    Analyze batter vs pitcher history.
+
+    Args:
+        bvp_data (dict): {'AtBats': int, 'Hits': int}
+
+    Returns:
+        bool: True if good vs pitcher, else False.
     """
-    if batter_vs_pitcher_data is None:
+    if bvp_data is None:
         return False
 
-    ab = batter_vs_pitcher_data.get('AtBats', 0)
-    hits = batter_vs_pitcher_data.get('Hits', 0)
+    ab = bvp_data.get('AtBats', 0)
+    hits = bvp_data.get('Hits', 0)
 
-    if ab < 10:
-        return True  # Small sample, assume neutral matchup
-
-    if ab > 0:
-        batting_average = hits / ab
-        return batting_average >= 0.250
-
+    if ab >= 5 and hits / ab >= 0.300:
+        return True
     return False
 
 def check_injury_status(injury_status):
     """
-    Rejects injured players.
-    """
-    if injury_status == "Injured":
-        return False
-    return True
+    Check if player is healthy.
 
-def check_team_form(team_record, losing_streak):
-    """
-    Checks if a team is eligible:
-    - Must have an overall winning percentage above .500
-    - Must NOT be on a losing streak of 5 or more games
-    """
-    wins = team_record.get('Wins', 0)
-    losses = team_record.get('Losses', 0)
+    Args:
+        injury_status (str): "Healthy", "Injured", or "Unknown".
 
-    if (wins + losses) == 0:
+    Returns:
+        bool: True if healthy, else False.
+    """
+    return injury_status == "Healthy"
+
+def check_team_form(team_form, losing_streak):
+    """
+    Check if the player's team is playing well.
+
+    Args:
+        team_form (dict): {'Wins': int, 'Losses': int}
+        losing_streak (int): Number of consecutive losses
+
+    Returns:
+        bool: True if team is above .500 and not on bad streak, else False.
+    """
+    wins = team_form.get('Wins', 0)
+    losses = team_form.get('Losses', 0)
+
+    if wins + losses == 0:
         return False
 
     winning_percentage = wins / (wins + losses)
 
-    if winning_percentage > 0.500 and losing_streak < 5:
+    if winning_percentage >= 0.500 and losing_streak <= 5:
         return True
-    else:
-        return False
+    return False
